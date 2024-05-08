@@ -1,0 +1,16 @@
+#!/bin/bash
+set -euo pipefail
+
+Start script...
+
+interactive mode? confirm reboot now
+
+download packages to cache
+set runlevel
+reboot
+
+Only run when no-one is logged in. Also force_users option?
+
+# cp -p /etc/runit/2{,.bak}
+# sed -ie 's/^runlevel=.*$/runlevel=upgrade/' /etc/runit/2
+# reboot && exit

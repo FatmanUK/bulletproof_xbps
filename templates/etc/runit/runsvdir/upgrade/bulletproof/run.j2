@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+
+# Restore runlevel to normal. First thing!
+/usr/bin/mv -f /etc/runit/2{.bak,}
+
+/usr/bin/echo Test  # upgrade from cache
+/usr/bin/echo what do tests look like?
+/usr/bin/sleep 10
+
+/usr/bin/reboot

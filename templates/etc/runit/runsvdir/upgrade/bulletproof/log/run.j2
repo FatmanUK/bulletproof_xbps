@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# We have no syslog or network. Therefore we must write a log file.
+exec tee -a /var/log/bulletproof_xbps.$(date +%Y%m%d)

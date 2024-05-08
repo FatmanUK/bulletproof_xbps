@@ -1,0 +1,29 @@
+---
+- name: 'Install bulletproof_xbps'
+  hosts: 'all'
+  gather_facts: no
+  become: yes
+  vars:
+    runlv_dir: '/etc/runit/runsvdir/upgrade'
+  tasks:
+    - name: 'Create runlevel'
+      file:
+        path: '{{ runlv_dir }}'
+        state: 'directory'
+
+    - name: 'Create service'
+      file:
+        path: '{{ runlv_dir }}/bulletproof/log'
+        state: 'directory'
+
+    - name: 'Create scripts'
+      loop:
+        - '{{ runlv_dir }}/bulletproof/run'
+        - '{{ runlv_dir }}/bulletproof/log/run'
+        - '/usr/bin/system_upgrade'
+      template:
+        src: '{{ item[1:] }}.j2'
+        dest: '{{ item }}'
+        mode: '0755'
+...
+# vim: set filetype=yaml
