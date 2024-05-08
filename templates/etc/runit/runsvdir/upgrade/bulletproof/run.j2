@@ -1,11 +1,25 @@
 #!/bin/bash
 set -euo pipefail
 
+[ $EUID != 0 ] && (
+	/usr/bin/echo "Please run as root."
+	exit 1
+)
+
+restore_runlevel() {
+	/usr/bin/mv -f /etc/runit/2{.bak,}
+}
+
+system_restart() {
+	/usr/bin/reboot
+}
+
 # Restore runlevel to normal. First thing!
-/usr/bin/mv -f /etc/runit/2{.bak,}
+restore_runlevel()
 
 /usr/bin/echo Test  # upgrade from cache
 /usr/bin/echo what do tests look like?
 /usr/bin/sleep 10
 
-/usr/bin/reboot
+# Reboot the host
+system_restart()

@@ -1,16 +1,32 @@
 #!/bin/bash
 set -euo pipefail
 
-Start script...
+[ $EUID != 0 ] && (
+	/usr/bin/echo "Please run as root."
+	exit 1
+)
 
-interactive mode? confirm reboot now
+change_runlevel() {
+	/usr/bin/cp -p /etc/runit/2{,.bak}
+	/usr/bin/sed -ie 's/^runlevel=.*$/runlevel=upgrade/' /etc/runit/2
+}
 
-download packages to cache
-set runlevel
-reboot
+system_restart() {
+	/usr/bin/reboot
+}
 
-Only run when no-one is logged in. Also force_users option?
+/usr/bin/echo Start script...
 
-# cp -p /etc/runit/2{,.bak}
-# sed -ie 's/^runlevel=.*$/runlevel=upgrade/' /etc/runit/2
-# reboot && exit
+/usr/bin/echo interactive mode? confirm reboot now
+
+/usr/bin/echo download packages to cache
+/usr/bin/echo set runlevel
+/usr/bin/echo reboot
+
+/usr/bin/echo Only run when no-one is logged in. Also force_users option?
+
+# Set runlevel to upgrade
+change_runlevel()
+
+# Reboot the host
+system_restart()
