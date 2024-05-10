@@ -1,25 +1,104 @@
 #!/bin/bash
 set -euo pipefail
 
-[ $EUID != 0 ] && (
-	/usr/bin/echo "Please run as root."
+die() {
+	/usr/bin/echo $1
 	exit 1
-)
+}
 
 restore_runlevel() {
 	/usr/bin/mv -f /etc/runit/2{.bak,}
+}
+
+unmount_overlayfs() {
+	# TODO: remount / rw after unmounting? To prevent issues with two mounts of ROOTDISK and only updating one of them. This allows removing the ro mount, though we need to keep the rw mount for the merge.
+	FS_DISK=$1
+	/usr/bin/umount ${FS_DISK}
+}
+
+mount_overlayfs() {
+	# TODO: remount / ro before chroot? To prevent undefined behaviour in the overlay.
+	FS_DISK=$1
+	RO_DISK="/tmp/ro"
+	RW_DISK="/tmp/rw"
+	INSTALL_FLAGS="-m0000 -oroot -groot"
+	MOUNT_WORK="workdir=${RW_DISK}/work"
+	MOUNT_UPPER="upperdir=${RW_DISK}/disk"
+	MOUNT_LOWER="lowerdir=${RO_DISK}"
+	MOUNT_OPTS="${MOUNT_LOWER},${MOUNT_UPPER},${MOUNT_WORK}"
+	/usr/bin/install -d ${RO_DISK} ${INSTALL_FLAGS}
+	/usr/bin/install -d ${RW_DISK} ${INSTALL_FLAGS}
+	/usr/bin/install -d ${FS_DISK} ${INSTALL_FLAGS}
+	/usr/bin/mount --bind -o ro / ${RO_DISK}
+	/usr/bin/mount -t tmpfs tmpfs ${RW_DISK}
+	/usr/bin/install -d ${RW_DISK}/work ${INSTALL_FLAGS}
+	/usr/bin/install -d ${RW_DISK}/disk ${INSTALL_FLAGS}
+	/usr/bin/mount overlay -t overlay -o ${MOUNT_OPTS} ${FS_DISK}
+}
+
+update_system() {
+	/usr/bin/chroot $1 /usr/bin/xbps-install -yuffc {{ cache_dir }} xbps
+	/usr/bin/chroot $1 /usr/bin/xbps-install -yuffc {{ cache_dir }}
+}
+
+is_ok() {
+	# TODO: testing?
+	echo Testing\; all good
+	return 0
+}
+
+merge_down() {
+	# TODO: merge down change?
+	# TODO: remove dependence on external tool: rsync
+	# Not a great solution: deleted files won't be removed. Can view 0:0 files in rw/work to remove them manually? Get list of files to delete here?
+	# https://unix.stackexchange.com/a/393932 might be an acceptable solution. Don't like the external dependency, though.
+	# This might have to be offline, using rsync for example.
+	echo Merging down change
+	/usr/bin/rsync -av /tmp/rw /
+}
+
+restore_grub() {
+	/usr/bin/mv -f /etc/default/grub /etc/default/grub.new
+	/usr/bin/mv -f /var/backups/grub-default /etc/default/grub
+	/usr/sbin/update-grub
 }
 
 system_restart() {
 	/usr/bin/reboot
 }
 
-# Restore runlevel to normal. First thing!
-restore_runlevel()
+[ $EUID != 0 ] && (
+	die "Please do not run this manually."
+)
 
-/usr/bin/echo Test  # upgrade from cache
-/usr/bin/echo what do tests look like?
-/usr/bin/sleep 10
+# Restore runlevel to normal. First thing!
+restore_runlevel
+
+# Mount overlayfs to perform update
+mount_overlayfs "/tmp/fs"
+
+# Update xbps, then the rest
+update_system "/tmp/fs"
+
+# Unmount overlay but leave rw layer for merging
+unmount_overlayfs "/tmp/fs"
+
+# If testing comes back ok, merge down the change
+# Otherwise, abort the change and just reboot
+if is_ok ; then
+	# Merge down the changes
+	merge_down
+
+	# Restore GRUB defaults and regenerate
+	restore_grub
+
+	# Remove package cache. We're not a mirror system.
+	#echo "Freeing up cache..."
+	#/usr/bin/rm -rf {{ cache_dir }}
+	# On the other hand, leaving the cache prevents xbps from re-downloading the
+	# same packages. Which it apparently will do if run again, despite having the
+	# latest packages installed.
+fi
 
 # Reboot the host
-system_restart()
+system_restart

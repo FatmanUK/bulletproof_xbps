@@ -1,32 +1,89 @@
 #!/bin/bash
 set -euo pipefail
 
-[ $EUID != 0 ] && (
-	/usr/bin/echo "Please run as root."
+die() {
+	/usr/bin/echo $1
 	exit 1
-)
+}
+
+download_packages_to_cache() {
+	/usr/bin/xbps-install -SDuyc {{ cache_dir }}
+}
 
 change_runlevel() {
 	/usr/bin/cp -p /etc/runit/2{,.bak}
-	/usr/bin/sed -ie 's/^runlevel=.*$/runlevel=upgrade/' /etc/runit/2
+	/usr/bin/sed -i -e 's/^runlevel=.*$/runlevel=upgrade/' /etc/runit/2
 }
 
 system_restart() {
 	/usr/bin/reboot
 }
 
-/usr/bin/echo Start script...
+is_interactive() {
+	[ "${-#*i}" == "$-" ]
+	return $?
+}
 
-/usr/bin/echo interactive mode? confirm reboot now
+is_has_logins() {
+	USERS=$(/usr/bin/users)
+	[ "x${USERS}" != "x" ]
+	return $?
+}
 
-/usr/bin/echo download packages to cache
-/usr/bin/echo set runlevel
-/usr/bin/echo reboot
+is_has_force_kick() {
+	# TODO: check for force kick users option
+	return -1
+}
 
-/usr/bin/echo Only run when no-one is logged in. Also force_users option?
+backup_grub_defaults() {
+	mkdir -p /var/backups
+	/usr/bin/cp -pr /etc/default/grub /var/backups/grub-default
+}
+
+yesno() {
+	read -p "$1 (y/n) " yn
+	case ${yn} in
+		y) return 0;;
+		n) return -1;;
+		*) echo "Invalid response, exiting."; exit 1;;
+	esac
+}
+
+[ $EUID != 0 ] && (
+	die "Please run as root."
+)
+
+if is_interactive ; then
+	yesno "Reboot system?"
+	if [ $? -eq -1 ]; then
+		exit 1
+	fi
+	if is_has_logins and not is_has_force_kick ; then
+		yesno "There are users still logged in. Kick them?"
+		if [ $? -eq -1 ]; then
+			exit 1
+		fi
+	fi
+else
+	if is_has_logins and not is_has_force_kick ; then
+		die "There are users still logged in and force-kick was not specified. Not proceeding."
+	fi
+fi
+
+# TODO: flag to flush cache before creating new?
+
+# Backup GRUB defaults --- for some reason, it overwrites them when
+# the grub2 package updates
+echo "Backing up GRUB defaults"
+backup_grub_defaults
+
+# Download new packages to special cache
+download_packages_to_cache
 
 # Set runlevel to upgrade
-change_runlevel()
+echo "Changing runlevel..."
+change_runlevel
 
 # Reboot the host
-system_restart()
+echo "Rebooting..."
+system_restart

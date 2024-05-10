@@ -5,6 +5,7 @@
   become: yes
   vars:
     runlv_dir: '/etc/runit/runsvdir/upgrade'
+    cache_dir: '/var/cache/upgrade'
   tasks:
     - name: 'Create runlevel'
       file:
