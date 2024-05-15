@@ -1,0 +1,1 @@
+project idea: automatic estate patching service (would need a "bulletproof xbps" wrapper --- backup of config files, database, keys etc., transactions, rollback, etc)
